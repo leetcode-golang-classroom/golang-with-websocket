@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,10 +43,41 @@ func NewManager(ctx context.Context) *Manager {
 
 func (m *Manager) setupEventHandlers() {
 	m.handlers[EventSendMessage] = SendMessage
+	m.handlers[EventChangeRoom] = ChatRoomHandler
 }
-
+func ChatRoomHandler(event Event, c *Client) error {
+	log.Println("chatroom")
+	var changeRoomEvent ChangeRoomEvent
+	if err := json.Unmarshal(event.Payload, &changeRoomEvent); err != nil {
+		return fmt.Errorf("bad payload in request: %v", err)
+	}
+	c.chatroom = changeRoomEvent.Name
+	return nil
+}
 func SendMessage(event Event, c *Client) error {
-	fmt.Println(event)
+	var chatevent SendMessageEvent
+	if err := json.Unmarshal(event.Payload, &chatevent); err != nil {
+		return fmt.Errorf("bad payload in request: %v", err)
+	}
+	var broadMessage NewMessageEvent
+	broadMessage.Sent = time.Now()
+	broadMessage.Message = chatevent.Message
+	broadMessage.From = chatevent.From
+
+	data, err := json.Marshal(broadMessage)
+	if err != nil {
+		return fmt.Errorf("failed to marshal broadcast message: %v", err)
+	}
+	outgoingEvent := Event{
+		Payload: data,
+		Type:    EventNewMessage,
+	}
+
+	for client := range c.manager.clients {
+		if client.chatroom == c.chatroom {
+			client.egress <- outgoingEvent
+		}
+	}
 	return nil
 }
 
@@ -97,7 +129,7 @@ func (m *Manager) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == config.AppConfig.Username && req.Password == config.AppConfig.Password {
+	if strings.Contains(config.AppConfig.Username, req.Username) && strings.Contains(config.AppConfig.Password, req.Password) {
 		type response struct {
 			OTP string `json:"otp"`
 		}

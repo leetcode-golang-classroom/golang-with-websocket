@@ -8,7 +8,7 @@
 <body>
   <div class="center">
     <h1>Amazing Chat Application</h1>
-    <h2 class="chat-header">Currently in chat: general</h2>
+    <h2 class="chat-header" id="chat-header">Currently in chat: general</h2>
     <h3 id="connection-header">Connected to Websocket: false</h3>
     <form id="chatroom-selection">
       <label for="chatroom">Chatroom:</label>
@@ -41,35 +41,73 @@
         this.payload = payload;
       }
     }
+    class SendMessageEvent {
+      constructor(message, from) {
+        this.message = message;
+        this.from = from;
+      }
+    }
+    class NewMessageEvent {
+      constructor(message, from, sent) {
+        this.message = message;
+        this.from = from;
+        this.sent = sent;
+      }
+    }
+    class ChangeChatRoomEvent {
+      constructor(name) {
+        this.name = name;
+      }
+    }
+    function changeChatRoom(evt) {
+      evt.preventDefault();
+       // Change Header to reflect the Changed chatroom
+       var newchat = document.getElementById("chatroom");
+      if (newchat != null && newchat.value != selectedChat) {
+        selectedChat = newchat.value;
+        console.log(selectedChat);
+        header = document.getElementById("chat-header");
+        header.innerHTML = "Currently in chat: " + selectedChat;
+
+        let changeEvent = new ChangeChatRoomEvent(selectedChat);
+        sendEvent("change_room", changeEvent);
+        textarea = document.getElementById("chatmessages");
+        textarea.innerHTML = `You changed room into: ${selectedChat}`;
+      }
+      // return false;
+    }
     function routeEvent(event) {
       if (event.type === undefined) {
         alert('no type field in the event');
       }
       switch(event.type) {
         case 'new_message':
-          console.log('new message');
+          const messageEvent = Object.assign(new NewMessageEvent, event.payload);
+          appendChatMessage(messageEvent);
           break;
         default:
           alert("unsupported message type");
           break;
       }
     }
+    function appendChatMessage(messageEvent) {
+      var date = new Date(messageEvent.sent);
+      const formatedMsg = `${date.toLocaleString()}- ${messageEvent.from}:${messageEvent.message}`;
+      textarea = document.getElementById('chatmessages');
+      textarea.innerHTML = textarea.innerHTML + "\n" + formatedMsg;
+      textarea.scrollTop = textarea.scrollHeight;
+    }
     function sendEvent(eventName, payload) {
       const event = new Event(eventName, payload);
       conn.send(JSON.stringify(event));
     }
-    function changeChatRoom(){
-      var newchat = document.getElementById("chatroom");
-      if (newchat != null && newmessage.value != selectedChat) {
-        console.log(newchat);
-      }
-      return false;
-    }
+    
     function sendMessage() {
       var newmessage = document.getElementById("message");
+      var currentUser = document.getElementById("username");
       if (newmessage != null ) {
-        // conn.send(newmessage.value);
-        sendEvent("send_message", newmessage.value);
+        let outgoingEvnet = new SendMessageEvent(newmessage.value, currentUser.value);
+        sendEvent("send_message", outgoingEvnet);
       }
       return false;
     }
